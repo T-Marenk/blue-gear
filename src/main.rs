@@ -1,3 +1,9 @@
+mod crossterm;
+
+use crate::crossterm::start;
+
 fn main() {
-    println!("Hello, world!");
+    if let Err(e) = start() {
+        eprint!("{e}")
+    };
 }
