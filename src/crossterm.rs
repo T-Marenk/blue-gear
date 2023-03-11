@@ -10,9 +10,9 @@ use crossterm::{
 use tui::{
     backend::{CrosstermBackend, Backend},
     Terminal,
-    Frame,
-    widgets::{Block, Borders}
 };
+
+use crate::ui::draw;
 
 //Start the application by creating the terminal and stopping it when done
 pub fn start() -> Result<(), Box<dyn Error>> {
@@ -39,16 +39,9 @@ pub fn start() -> Result<(), Box<dyn Error>> {
 fn run<B: Backend>(
     terminal: &mut Terminal<B>
 ) -> io::Result<()> {
-    terminal.draw(|f| ui(f))?;
+    terminal.draw(|f| draw(f))?;
 
     thread::sleep(Duration::from_millis(5000));
-    Ok(())
-}
 
-fn ui<B: Backend>(f: &mut Frame<B>) {
-    let size = f.size();
-    let block = Block::default()
-        .title("Block")
-        .borders(Borders::ALL);
-    f.render_widget(block, size);
+    Ok(())
 }
