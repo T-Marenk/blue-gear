@@ -1,6 +1,7 @@
 mod crossterm;
 mod blue;
 mod ui;
+mod app;
 
 use tokio;
 use crate::crossterm::start;

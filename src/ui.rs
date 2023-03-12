@@ -7,7 +7,9 @@ use tui::{
     text::{Span, Spans}
 };
 
-pub fn draw<B: Backend>(f: &mut Frame<B>, status: bool) {
+use crate::app::App;
+
+pub fn draw<B: Backend>(f: &mut Frame<B>, app: &mut App) {
     let constraints: Vec<Constraint> = vec![
         Constraint::Length(3),
         Constraint::Min(0)
@@ -16,10 +18,7 @@ pub fn draw<B: Backend>(f: &mut Frame<B>, status: bool) {
         .constraints(constraints.as_ref())
         .split(f.size());
     
-    let status = match status {
-        true => "On",
-        false => "Off"
-    };
+    let status = app.get_bluetooth_status();
 
     draw_state_block(f, status, &parts);
 }
