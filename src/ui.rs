@@ -17,7 +17,7 @@ pub fn draw<B: Backend>(f: &mut Frame<B>, app: &mut App) {
     let parts = Layout::default()
         .constraints(constraints.as_ref())
         .split(f.size());
-    
+ 
     let status = app.get_bluetooth_status();
 
     draw_state_block(f, status, &parts);

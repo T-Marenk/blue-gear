@@ -18,15 +18,15 @@ use crate::{
 
 
 // Start the application by creating the terminal and stopping it when done
-pub async fn start() -> Result<(), Box<dyn Error>> {
+pub fn start() -> Result<(), Box<dyn Error>> {
+    let mut app = App::new();
     enable_raw_mode()?;
     let mut stdout = io::stdout();
     execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
     
-    let mut app = App::default();
-    let response = run(&mut terminal, &mut app).await;
+    let response = run(&mut terminal, &mut app);
     
     disable_raw_mode()?;
     execute!(terminal.backend_mut(), LeaveAlternateScreen, DisableMouseCapture)?;
@@ -40,7 +40,7 @@ pub async fn start() -> Result<(), Box<dyn Error>> {
 }
 
 // Runs the application
-async fn run<B: Backend>(
+fn run<B: Backend>(
     terminal: &mut Terminal<B>,
     mut app: &mut App
 ) -> io::Result<()> {

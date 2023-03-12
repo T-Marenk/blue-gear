@@ -1,4 +1,3 @@
-use futures::executor::block_on;
 use bluer::Adapter;
 
 pub struct Blue {
@@ -17,8 +16,8 @@ impl Blue {
         })
     }
 
-    pub fn get_bluetooth_status(&mut self) -> bool {
-        block_on(self.update_status()).unwrap();
+    pub async fn get_bluetooth_status(&mut self) -> bool {
+        self.update_status().await.unwrap();
          
         self.status.clone()
     }
