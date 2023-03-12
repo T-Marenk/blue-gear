@@ -1,8 +1,10 @@
 use std::{
     error::Error,
-    io, thread, time::Duration
+    io,
+    time::Duration
 };
 use crossterm::{
+    event::{self, Event, KeyCode},
     execute, 
     terminal::{EnterAlternateScreen, disable_raw_mode, LeaveAlternateScreen, enable_raw_mode}, 
     event::{EnableMouseCapture, DisableMouseCapture}
@@ -44,9 +46,23 @@ fn run<B: Backend>(
     terminal: &mut Terminal<B>,
     mut app: &mut App
 ) -> io::Result<()> {
-    terminal.draw(|f| draw(f, &mut app))?;
+    let mut quit = false;
 
-    thread::sleep(Duration::from_millis(5000));
+    loop {
+        terminal.draw(|f| draw(f, &mut app))?;
+        
+        if crossterm::event::poll(Duration::from_millis(0))? {
+            if let Event::Key(key) = event::read()? {
+                match key.code {
+                    KeyCode::Char('q') => quit = true,
+                    _ => {},
+                }
+            }
+        }
+        if quit {
+            break;
+        }
+    }
 
     Ok(())
 }
