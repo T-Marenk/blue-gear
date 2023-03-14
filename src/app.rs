@@ -1,32 +1,32 @@
-use tokio::runtime::Runtime;
+use std::error::Error;
+
 use crate::blue::Blue;
 
+/// Struct, which holds values used by the application
 pub struct App {
     pub bluetooth: Blue,
-    pub selected: u8,
-    pub rt: Runtime
+    pub state: u8
 }
 
 impl App {
-    pub fn new() -> Self {
-        let rt = tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build().unwrap();
+    /// Creates new instance of App for use
+    /// async function in order to create new instance of Blue
+    pub async fn new() -> Result<Self, Box<dyn Error>> {
+        let bluetooth = Blue::new().await?;
 
-        let bluetooth = rt.block_on(Blue::new()).unwrap();
-
-        App {
+        Ok(App {
             bluetooth,
-            selected: 0,
-            rt
-        } 
+            state: 0
+        })
     }
+    
+    /// Returns bluetooth status to use in UI
     pub fn get_bluetooth_status(&mut self) -> &str {
-        let status = match self.rt.block_on(self.bluetooth.get_bluetooth_status()) {
+        let status = match self.bluetooth.status {
             true => "On",
             false => "Off"
         };
-        
+
         status
     }
 }
