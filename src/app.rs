@@ -29,4 +29,15 @@ impl App {
 
         status
     }
+    
+    /// Toggle bluetooth on and off
+    ///
+    /// PANICS!
+    /// Function panics if an error occurs while toggling bluetooth
+    pub async fn toggle_bluetooth(&mut self) {
+        match self.bluetooth.toggle().await {
+            Ok(_) => (),
+            Err(e) => panic!("Error while toggling bluetooth {}", e)
+        };
+    }
 }

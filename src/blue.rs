@@ -2,7 +2,7 @@ use bluer::Adapter;
 
 /// Holds the data used to interact with bluetooth devices
 pub struct Blue {
-    pub adapter: Adapter,
+    adapter: Adapter,
     pub status: bool,
 }
 
@@ -19,5 +19,12 @@ impl Blue {
             adapter,
             status
         })
+    }
+    
+    /// Toggle bluetooth adapter on and off
+    pub async fn toggle(&mut self) -> bluer::Result<()> {
+        self.adapter.set_powered(!self.status).await?;
+        self.status = !self.status;
+        Ok(())
     }
 }

@@ -1,13 +1,13 @@
 use std::{
     error::Error,
     io,
-    time::Duration, sync::Mutex
+    sync::Mutex
 };
 use crossterm::{
-    event::{self, Event, KeyCode},
+    event::{self, Event},
     execute, 
     terminal::{EnterAlternateScreen, disable_raw_mode, LeaveAlternateScreen, enable_raw_mode}, 
-    event::{EnableMouseCapture, DisableMouseCapture, KeyEvent}
+    event::{EnableMouseCapture, DisableMouseCapture}
 };
 use futures::pin_mut; // Will be used later
 use tokio::runtime::Runtime;
@@ -18,6 +18,7 @@ use tui::{
 use crate::{
     app::App,
     ui::draw,
+    keys::handle_key
 };
 
 
@@ -65,6 +66,9 @@ fn create_rt() -> Result<Runtime, Box<dyn Error>> {
         Ok(rt)
 }
 
+/// Runs the application with the created terminal, app and runtime. Calls the appropriate
+/// functions depending on the state of the application, which it gets from app. Always calls
+/// either with bluetooth or without it, depending on bluetooth status.
 fn run<B: Backend>(
     mut terminal: &mut Terminal<B>,
     app_mutex: &Mutex<App>,
@@ -99,7 +103,7 @@ fn bluetooth_off<B: Backend>(
 
     loop {
         let response: u8 = match event::read()? {
-            Event::Key(key) => handle_key(&app_mutex, &mut terminal, key),
+            Event::Key(key) => handle_key(&app_mutex, &mut terminal, &rt, key),
             _ => 0
         };
         if response == 1 {
@@ -110,19 +114,6 @@ fn bluetooth_off<B: Backend>(
     Ok(())
 }
 
-fn handle_key<B: Backend>(app_mutex: &Mutex<App>, mut terminal: &mut Terminal<B>, key: KeyEvent) -> u8 {
-        match key.code {
-                KeyCode::Char('q') => test(&app_mutex),
-                KeyCode::Char('d') => drawer(&mut terminal, &app_mutex),
-                _ => 0
-            }
-}
-
-fn test(app_mutex: &Mutex<App>) -> u8 {
-    let mut app = app_mutex.lock().unwrap();
-    app.state = 1;
-    1
-}
 /// Call draw function in order to render the ui with changes to the terminal
 fn drawer<B: Backend>(terminal: &mut Terminal<B>, app_mutex: &Mutex<App>) -> u8 {
     let mut app = match app_mutex.lock() {
