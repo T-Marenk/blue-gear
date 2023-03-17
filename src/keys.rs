@@ -1,53 +1,37 @@
 use crossterm::event::{KeyEvent, KeyCode};
-use tokio::runtime::Runtime;
-use std::sync::{Mutex, MutexGuard};
-use tui::{
-    Terminal,
-    backend::Backend
-};
-
+use std::sync::Arc;
+use tokio::sync::{Mutex, MutexGuard};
 use crate::app::App;
 
 /// Matches the pressed key to the wanted function.
-pub fn handle_key<B: Backend>(
-    app_mutex: &Mutex<App>, 
-    mut terminal: &mut Terminal<B>,
-    rt: &Runtime,
+pub async fn handle_key(
+    app_mutex: &Arc<Mutex<App>>, 
     key: KeyEvent
-    ) -> u8 {
+    ) -> Option<bool> {
     match key {
         KeyEvent {
             code: KeyCode::Char('q'),
             ..
-        } => quit(app_mutex),
+        } => quit(app_mutex).await,
         KeyEvent {
             code: KeyCode::Tab,
             ..
-        } => toggle(&app_mutex, &mut terminal, &rt),
-        _ => 0
+        } => toggle(app_mutex).await,
+        _ => None
     }
 }
 
 /// Tells the application it should quit, by turning its state to 1
-fn quit(app_mutex: &Mutex<App>) -> u8 {
-    let mut app: std::sync::MutexGuard<App> = match app_mutex.lock() {
-        Ok(app) => app,
-        Err(app) => app.into_inner()
-    };
+async fn quit(app_mutex: &Arc<Mutex<App>>) -> Option<bool> {
+    let mut app: MutexGuard<App> = app_mutex.lock().await;
     app.state = 1;
-    1
+    Some(true)
 }
 
 /// Call app functions to toggle bluetooth on and off
-fn toggle<B: Backend>(app_mutex: &Mutex<App>,
-          terminal: &mut Terminal<B>,
-          rt: &Runtime
-) -> u8 {
-    let mut app: MutexGuard<App> = match app_mutex.lock() {
-        Ok(app) => app,
-        Err(app) => app.into_inner()
-    };
-    rt.block_on(app.toggle_bluetooth());
-    terminal.draw(|f| crate::ui::draw(f, &mut app)).unwrap();
-    0
+async fn toggle(app_mutex: &Arc<Mutex<App>>,
+) -> Option<bool> {
+    let mut app: MutexGuard<App> = app_mutex.lock().await;
+    app.toggle_bluetooth().await;
+    Some(false)
 }
