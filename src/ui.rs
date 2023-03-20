@@ -6,8 +6,9 @@ use tui::{
     style::{Style, Color},
     text::{Span, Spans}
 };
-
+use std::rc::Rc;
 use crate::app::App;
+
 
 pub fn draw<B: Backend>(f: &mut Frame<B>, app: &mut App) {
     let constraints: Vec<Constraint> = vec![
@@ -23,7 +24,7 @@ pub fn draw<B: Backend>(f: &mut Frame<B>, app: &mut App) {
     draw_state_block(f, status, &parts);
 }
 
-fn draw_state_block<B: Backend>(f: &mut Frame<B>, status: &str, parts: &Vec<Rect>) {
+fn draw_state_block<B: Backend>(f: &mut Frame<B>, status: &str, parts: &Rc<[Rect]>) {
     let titles = vec![
         Spans::from("Bluetooth status"),
         Spans::from(Span::styled(status, Style::default().fg(Color::Green)))];

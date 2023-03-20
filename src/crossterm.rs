@@ -62,12 +62,12 @@ pub fn start() -> Result<(), Box<dyn Error>> {
 /// Creates tokio runtime for application
 /// Uses single threaded runtime
 fn create_rt() -> Result<Runtime, Box<dyn Error>> {
-        let rt = tokio::runtime::Builder::new_multi_thread()
-            .worker_threads(1)
-            .enable_all()
-            .build()?;
+    let rt = tokio::runtime::Builder::new_multi_thread()
+        .worker_threads(1)
+        .enable_all()
+        .build()?;
 
-        Ok(rt)
+    Ok(rt)
 }
 
 fn create_channels() -> (Sender<u8>, Receiver<u8>) {
