@@ -1,11 +1,14 @@
 use std::error::Error;
 
+use bluer::Device;
+
 use crate::blue::Blue;
 
 /// Struct, which holds values used by the application
 pub struct App {
     pub bluetooth: Blue,
-    pub state: u8
+    pub devices: Vec<Device>,
+    pub state: u8,
 }
 
 impl App {
@@ -16,18 +19,17 @@ impl App {
 
         Ok(App {
             bluetooth,
+            devices: Vec::new(),
             state: 0
         })
     }
     
     /// Returns bluetooth status to use in UI
     pub fn get_bluetooth_status(&mut self) -> &str {
-        let status = match self.bluetooth.status {
+         match self.bluetooth.status {
             true => "On",
             false => "Off"
-        };
-
-        status
+        }
     }
     
     /// Toggle bluetooth on and off

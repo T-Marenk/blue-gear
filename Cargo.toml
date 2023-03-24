@@ -10,4 +10,4 @@ bluer = { version = "0.15.7", features = ["full"] }
 crossterm = "0.26.1"
 futures = "0.3.27"
 tokio = { version = "1.26.0", features = ["full"] }
-tui = { package = "ratatui" }
+tui = { version = "0.20.0", package = "ratatui" }

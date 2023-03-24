@@ -74,11 +74,12 @@ fn create_channels() -> (Sender<u8>, Receiver<u8>) {
     let (sender, receiver): (Sender<u8>, Receiver<u8>) = channel(16);
     (sender, receiver)
 }
+
 /// Runs the application with the created terminal, app and runtime. Calls the appropriate
 /// functions depending on the state of the application, which it gets from app. Always calls
 /// either with bluetooth or without it, depending on bluetooth status.
 fn run<B: Backend>(
-    mut terminal: &mut Terminal<B>,
+    terminal: &mut Terminal<B>,
     app_mutex: Arc<Mutex<App>>,
     rt: &Runtime
 ) -> Result<(), Box<dyn Error>> {
@@ -86,7 +87,7 @@ fn run<B: Backend>(
     sender.send(1).unwrap();
     // let sender2 = sender.clone();
     let reader = rt.spawn(event_reader(app_mutex.clone(), sender)); 
-    rt.block_on(drawer(&mut terminal, app_mutex.clone(), receiver));
+    rt.block_on(drawer(terminal, app_mutex, receiver));
     
     rt.block_on(reader)?;
     Ok(())
@@ -119,7 +120,7 @@ async fn drawer<B: Backend>(
     app_mutex: Arc<Mutex<App>>,
     mut receiver: Receiver<u8>
 ) {
-    while let Ok(_) = receiver.recv().await {
+    while (receiver.recv().await).is_ok() {
         let mut app: MutexGuard<App> = app_mutex.lock().await;
         terminal.draw(|f| draw(f, &mut app)).unwrap(); 
     }
