@@ -54,11 +54,6 @@ pub fn start() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-// Runs the application
-// rt.task.spawn(suorita_etsintä)
-// rt.task.spawn(älä suorita etsintää vaan näppäimet)
-// nuo loopiin, ja suorita ja älä suorita ovat whileja
-
 /// Creates tokio runtime for application
 /// Uses single threaded runtime
 fn create_rt() -> Result<Runtime, Box<dyn Error>> {
@@ -102,17 +97,21 @@ async fn bluetooth_finder(
     sender: Sender<u8>,
     mut receiver: Receiver<u8>,
 ) {
-    let mut status = app_mutex.lock().await.get_bluetooth_status();
+    let mut app = app_mutex.lock().await;
+    let mut status = app.get_bluetooth_status();
+    drop(app);
     loop {
         if status {
+            let mut should_break = false;
             while status {
                 if let Ok(message) = receiver.recv().await {
                     match message {
-                        0 => break,
-                        1 => {  status = app_mutex.lock().await.get_bluetooth_status(); }
+                        0 => { should_break = true },
+                        1 => { status = app_mutex.lock().await.get_bluetooth_status(); }
                         _ => {}
                     }
                 } else {  break };
+                if should_break { break };
             };
         } else {
             if let Ok(message) = receiver.recv().await {
