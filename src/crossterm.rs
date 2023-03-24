@@ -85,30 +85,73 @@ fn run<B: Backend>(
 ) -> Result<(), Box<dyn Error>> {
     let (sender, receiver) = create_channels();
     sender.send(1).unwrap();
-    // let sender2 = sender.clone();
-    let reader = rt.spawn(event_reader(app_mutex.clone(), sender)); 
+    let sender2 = sender.clone();
+    let (b_sender, b_receiver) = create_channels();
+    let finder = rt.spawn(bluetooth_finder(app_mutex.clone(), sender, b_receiver));
+    let reader = rt.spawn(event_reader(app_mutex.clone(), sender2, b_sender)); 
     rt.block_on(drawer(terminal, app_mutex, receiver));
     
     rt.block_on(reader)?;
+    rt.block_on(finder)?;
     Ok(())
 }
 
-/// Run the applicatin without bluetooth discovery when bluetooth is Off
-/// This way, the bluetooth can still be turned on, but there wont be detection for devices
+/// Responsible for finding bluetooth devices and detecting changes
+async fn bluetooth_finder(
+    app_mutex: Arc<Mutex<App>>,
+    sender: Sender<u8>,
+    mut receiver: Receiver<u8>,
+) {
+    let mut status = app_mutex.lock().await.get_bluetooth_status();
+    loop {
+        if status {
+            while status {
+                if let Ok(message) = receiver.recv().await {
+                    match message {
+                        0 => break,
+                        1 => {  status = app_mutex.lock().await.get_bluetooth_status(); }
+                        _ => {}
+                    }
+                } else {  break };
+            };
+        } else {
+            if let Ok(message) = receiver.recv().await {
+                match message {
+                    0 => break,
+                    1 => {  status = app_mutex.lock().await.get_bluetooth_status(); }
+                    _ => {}
+                }
+            } else {  break };
+        };
+    };
+}
+/// Responsible for checking system events and finding relevant keyevents. Once keyevents are
+/// found, key handeler is called 
 async fn event_reader(
     app_mutex: Arc<Mutex<App>>,
-    sender: Sender<u8> 
+    sender: Sender<u8>,
+    b_sender: Sender<u8>,
 ) {
     loop {
-        let response: Option<bool> = match event::read().unwrap() {
+        let response: Option<u8> = match event::read().unwrap() {
             Event::Key(key) => handle_key(&app_mutex, key).await,
             _ => None
         };
         match response {
             None => {},
             Some(r) => {
-                if r { break };
-                sender.send(1).unwrap();
+                match r {
+                    0 => {
+                        b_sender.send(0).unwrap();
+                        break
+                    },
+                    1 => {  sender.send(1).unwrap(); }
+                    2 => {
+                        sender.send(1).unwrap();
+                        b_sender.send(1).unwrap();
+                    },
+                    _ => {}
+                }
             }
         }
     }

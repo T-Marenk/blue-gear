@@ -7,7 +7,7 @@ use crate::app::App;
 pub async fn handle_key(
     app_mutex: &Arc<Mutex<App>>, 
     key: KeyEvent
-    ) -> Option<bool> {
+    ) -> Option<u8> {
     match key {
         KeyEvent {
             code: KeyCode::Char('q'),
@@ -22,16 +22,16 @@ pub async fn handle_key(
 }
 
 /// Tells the application it should quit, by turning its state to 1
-async fn quit(app_mutex: &Arc<Mutex<App>>) -> Option<bool> {
+async fn quit(app_mutex: &Arc<Mutex<App>>) -> Option<u8> {
     let mut app: MutexGuard<App> = app_mutex.lock().await;
     app.state = 1;
-    Some(true)
+    Some(0)
 }
 
 /// Call app functions to toggle bluetooth on and off
 async fn toggle(app_mutex: &Arc<Mutex<App>>,
-) -> Option<bool> {
+) -> Option<u8> {
     let mut app: MutexGuard<App> = app_mutex.lock().await;
     app.toggle_bluetooth().await;
-    Some(false)
+    Some(2)
 }

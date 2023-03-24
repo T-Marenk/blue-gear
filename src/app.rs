@@ -25,11 +25,8 @@ impl App {
     }
     
     /// Returns bluetooth status to use in UI
-    pub fn get_bluetooth_status(&mut self) -> &str {
-         match self.bluetooth.status {
-            true => "On",
-            false => "Off"
-        }
+    pub fn get_bluetooth_status(&mut self) -> bool {
+         self.bluetooth.status
     }
     
     /// Toggle bluetooth on and off
