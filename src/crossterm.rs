@@ -1,7 +1,7 @@
 use std::{
     error::Error,
     io,
-    sync::Arc
+    sync::Arc,
 };
 use crossterm::{
     event::{self, Event},
@@ -12,7 +12,7 @@ use crossterm::{
 use futures::pin_mut; // Will be used later
 use tokio::{
     runtime::Runtime,
-    sync::{Mutex, MutexGuard, broadcast::{Sender, Receiver, channel}}
+    sync::{Mutex, MutexGuard, mpsc::{Sender, Receiver, channel}}
 };
 use tui::{
     backend::{CrosstermBackend, Backend},
@@ -21,7 +21,7 @@ use tui::{
 use crate::{
     app::App,
     ui::draw,
-    keys::handle_key
+    keys::handle_key, blue::Blue
 };
 
 
@@ -33,7 +33,13 @@ pub fn start() -> Result<(), Box<dyn Error>> {
         Err(e) => return Err(e)
     };
 
-    let app_mutex = Arc::new(Mutex::new(rt.block_on(App::new())?));
+    let app_mutex = Arc::new(Mutex::new(App::new()));
+    
+    let blue: Blue = rt.block_on(Blue::new())?;
+
+    let mut app = rt.block_on(app_mutex.lock());
+    app.status = blue.status;
+    drop(app);
 
     enable_raw_mode()?;
     let mut stdout = io::stdout();
@@ -41,7 +47,7 @@ pub fn start() -> Result<(), Box<dyn Error>> {
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
 
-    let response = run(&mut terminal, app_mutex, &rt);
+    let response = run(&mut terminal, app_mutex, blue, rt);
     
     disable_raw_mode()?;
     execute!(terminal.backend_mut(), LeaveAlternateScreen, DisableMouseCapture)?;
@@ -76,54 +82,63 @@ fn create_channels() -> (Sender<u8>, Receiver<u8>) {
 fn run<B: Backend>(
     terminal: &mut Terminal<B>,
     app_mutex: Arc<Mutex<App>>,
-    rt: &Runtime
+    blue: Blue,
+    rt: Runtime,
 ) -> Result<(), Box<dyn Error>> {
+
     let (sender, receiver) = create_channels();
-    sender.send(1).unwrap();
+    rt.block_on(sender.send(1)).unwrap();
     let sender2 = sender.clone();
     let (b_sender, b_receiver) = create_channels();
-    let finder = rt.spawn(bluetooth_finder(app_mutex.clone(), sender, b_receiver));
+
+    let finder = rt.spawn(bluetooth_finder(blue, app_mutex.clone(), sender, b_receiver));
     let reader = rt.spawn(event_reader(app_mutex.clone(), sender2, b_sender)); 
+
     rt.block_on(drawer(terminal, app_mutex, receiver));
     
     rt.block_on(reader)?;
     rt.block_on(finder)?;
+
     Ok(())
 }
 
 /// Responsible for finding bluetooth devices and detecting changes
 async fn bluetooth_finder(
+    mut blue: Blue,
     app_mutex: Arc<Mutex<App>>,
     sender: Sender<u8>,
     mut receiver: Receiver<u8>,
 ) {
-    let mut app = app_mutex.lock().await;
-    let mut status = app.get_bluetooth_status();
-    drop(app);
     loop {
-        if status {
-            let mut should_break = false;
-            while status {
-                if let Ok(message) = receiver.recv().await {
-                    match message {
-                        0 => { should_break = true },
-                        1 => { status = app_mutex.lock().await.get_bluetooth_status(); }
-                        _ => {}
-                    }
-                } else {  break };
-                if should_break { break };
+        if let Some(message) = receiver.recv().await {
+            match message {
+                0 => break,
+                1 | 2 => {
+                    toggle_bluetooth(&mut blue, &app_mutex, &sender).await
+                },
+                _ => {}
+            }
+        } else { break };
+        while let Ok(message) = receiver.try_recv() {
+            if message == 1 {
+                toggle_bluetooth(&mut blue, &app_mutex, &sender).await
             };
-        } else {
-            if let Ok(message) = receiver.recv().await {
-                match message {
-                    0 => break,
-                    1 => {  status = app_mutex.lock().await.get_bluetooth_status(); }
-                    _ => {}
-                }
-            } else {  break };
         };
     };
 }
+
+async fn toggle_bluetooth(
+    blue: &mut Blue,
+    app_mutex: &Arc<Mutex<App>>,
+    sender: &Sender<u8>,
+) {
+    blue.toggle().await.unwrap();
+    let mut app = app_mutex.lock().await;
+    app.status = blue.status;
+    drop(app);
+    sender.send(1).await.unwrap();
+}
+
 /// Responsible for checking system events and finding relevant keyevents. Once keyevents are
 /// found, key handeler is called 
 async fn event_reader(
@@ -133,7 +148,7 @@ async fn event_reader(
 ) {
     loop {
         let response: Option<u8> = match event::read().unwrap() {
-            Event::Key(key) => handle_key(&app_mutex, key).await,
+            Event::Key(key) => handle_key(&app_mutex, key, &b_sender).await,
             _ => None
         };
         match response {
@@ -141,13 +156,13 @@ async fn event_reader(
             Some(r) => {
                 match r {
                     0 => {
-                        b_sender.send(0).unwrap();
+                        b_sender.send(0).await.unwrap();
                         break
                     },
-                    1 => {  sender.send(1).unwrap(); }
+                    1 => { sender.send(1).await.unwrap(); }
                     2 => {
-                        sender.send(1).unwrap();
-                        b_sender.send(1).unwrap();
+                        sender.send(1).await.unwrap();
+                        // b_sender.send(1).unwrap();
                     },
                     _ => {}
                 }
@@ -162,7 +177,7 @@ async fn drawer<B: Backend>(
     app_mutex: Arc<Mutex<App>>,
     mut receiver: Receiver<u8>
 ) {
-    while (receiver.recv().await).is_ok() {
+    while (receiver.recv().await).is_some() {
         let mut app: MutexGuard<App> = app_mutex.lock().await;
         terminal.draw(|f| draw(f, &mut app)).unwrap(); 
     }

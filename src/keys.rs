@@ -1,12 +1,16 @@
 use crossterm::event::{KeyEvent, KeyCode};
 use std::sync::Arc;
-use tokio::sync::{Mutex, MutexGuard};
+use tokio::{
+    time::{sleep, Duration},
+    sync::{Mutex, MutexGuard, mpsc::Sender},
+};
 use crate::app::App;
 
 /// Matches the pressed key to the wanted function.
 pub async fn handle_key(
     app_mutex: &Arc<Mutex<App>>, 
-    key: KeyEvent
+    key: KeyEvent,
+    sender: &Sender<u8>,
     ) -> Option<u8> {
     match key {
         KeyEvent {
@@ -16,7 +20,7 @@ pub async fn handle_key(
         KeyEvent {
             code: KeyCode::Tab,
             ..
-        } => toggle(app_mutex).await,
+        } => toggle(app_mutex, sender).await,
         _ => None
     }
 }
@@ -29,9 +33,21 @@ async fn quit(app_mutex: &Arc<Mutex<App>>) -> Option<u8> {
 }
 
 /// Call app functions to toggle bluetooth on and off
-async fn toggle(app_mutex: &Arc<Mutex<App>>,
+async fn toggle(app_mutex: &Arc<Mutex<App>>, sender: &Sender<u8>,
 ) -> Option<u8> {
-    let mut app: MutexGuard<App> = app_mutex.lock().await;
-    app.toggle_bluetooth().await;
-    Some(2)
+    let app = app_mutex.lock().await;
+    let current_status: bool = app.status;
+    drop(app);
+    sender.send(1).await.unwrap();
+    loop {
+        sleep(Duration::from_millis(20)).await;
+        let app = app_mutex.lock().await;
+        let status: bool = app.status;
+        drop(app);
+        if status != current_status {
+            break;
+        }
+        sender.send(2).await.unwrap();
+    }
+    Some(3)
 }
