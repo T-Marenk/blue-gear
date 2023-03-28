@@ -1,24 +1,20 @@
+use crate::app::App;
+use std::rc::Rc;
 use tui::{
     backend::Backend,
-    Frame,
-    layout::{Layout, Constraint, Rect},
+    layout::{Constraint, Layout, Rect},
+    style::{Color, Style},
+    text::{Span, Spans},
     widgets::{Block, Borders, Tabs},
-    style::{Style, Color},
-    text::{Span, Spans}
+    Frame,
 };
-use std::rc::Rc;
-use crate::app::App;
-
 
 pub fn draw<B: Backend>(f: &mut Frame<B>, app: &mut App) {
-    let constraints: Vec<Constraint> = vec![
-        Constraint::Length(3),
-        Constraint::Min(0)
-    ];
+    let constraints: Vec<Constraint> = vec![Constraint::Length(3), Constraint::Min(0)];
     let parts = Layout::default()
         .constraints(constraints.as_ref())
         .split(f.size());
- 
+
     let status = match app.status {
         true => "On",
         false => "Off",
@@ -30,9 +26,15 @@ pub fn draw<B: Backend>(f: &mut Frame<B>, app: &mut App) {
 fn draw_state_block<B: Backend>(f: &mut Frame<B>, status: &str, parts: &Rc<[Rect]>) {
     let titles = vec![
         Spans::from("Bluetooth status"),
-        Spans::from(Span::styled(status, Style::default().fg(Color::Green)))];
+        Spans::from(Span::styled(status, Style::default().fg(Color::Green))),
+    ];
     let tabs = Tabs::new(titles)
-        .block(Block::default().borders(Borders::ALL).border_style(Style::default().fg(Color::Gray)).title("Blue-rs"))
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(Color::Gray))
+                .title("Blue-rs"),
+        )
         .highlight_style(Style::default().fg(Color::Cyan))
         .select(0);
     f.render_widget(tabs, parts[0]);

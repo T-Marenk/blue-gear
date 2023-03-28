@@ -10,7 +10,6 @@ pub struct App {
 impl App {
     /// Creates new instance of App for use
     pub fn new() -> Self {
-
         App {
             devices: Vec::new(),
             state: 0,

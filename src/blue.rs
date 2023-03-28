@@ -15,12 +15,9 @@ impl Blue {
         let adapter = session.default_adapter().await?;
         let status = adapter.is_powered().await?;
 
-        Ok(Blue{
-            adapter,
-            status
-        })
+        Ok(Blue { adapter, status })
     }
-    
+
     /// Toggle bluetooth adapter on and off
     pub async fn toggle(&mut self) -> bluer::Result<()> {
         self.adapter.set_powered(!self.status).await?;

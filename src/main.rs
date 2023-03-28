@@ -1,8 +1,8 @@
-mod crossterm;
-mod blue;
-mod ui;
 mod app;
+mod blue;
+mod crossterm;
 mod keys;
+mod ui;
 
 use crate::crossterm::start;
 
