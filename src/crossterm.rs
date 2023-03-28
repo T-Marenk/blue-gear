@@ -102,7 +102,8 @@ fn run<B: Backend>(
     Ok(())
 }
 
-/// Responsible for finding bluetooth devices and detecting changes
+/// Responsible for managing bluetooth, finding bluetooth devices and detecting changes while bluetooth is turned on.
+/// While bluetooth is off, waits for signal to turn bluetooth on and start search again
 async fn bluetooth_finder(
     mut blue: Blue,
     app_mutex: Arc<Mutex<App>>,
@@ -110,23 +111,77 @@ async fn bluetooth_finder(
     mut receiver: Receiver<u8>,
 ) {
     loop {
+        let should_break: bool = match blue.status {
+            true => bluetooth_on(&mut blue, &app_mutex, &sender, &mut receiver).await,
+            false => bluetooth_off(&mut blue, &app_mutex, &sender, &mut receiver).await,
+        };
+        if should_break { break };
+    }
+}
+
+/// Responsible for bluetooth when bluetooth is turned on
+async fn bluetooth_on(
+    mut blue: &mut Blue,
+    app_mutex: &Arc<Mutex<App>>,
+    sender: &Sender<u8>,
+    receiver: &mut Receiver<u8>,
+) -> bool {
+    loop {
         if let Some(message) = receiver.recv().await {
             match message {
-                0 => break,
+                0 => return true,
                 1 | 2 => {
-                    toggle_bluetooth(&mut blue, &app_mutex, &sender).await
+                    toggle_bluetooth(&mut blue, &app_mutex, &sender).await;
+                    break
                 },
                 _ => {}
             }
-        } else { break };
-        while let Ok(message) = receiver.try_recv() {
-            if message == 1 {
-                toggle_bluetooth(&mut blue, &app_mutex, &sender).await
-            };
+        } else { 
+            return true 
+        };
+    }
+    while let Ok(message) = receiver.try_recv() {
+        match message {
+            0 => break,
+            1 => toggle_bluetooth(&mut blue, &app_mutex, &sender).await,
+            _ => {},
         };
     };
+
+    false
 }
 
+/// Responsible for bluetooth management when bluetooth is turned off
+async fn bluetooth_off(
+    mut blue: &mut Blue,
+    app_mutex: &Arc<Mutex<App>>,
+    sender: &Sender<u8>,
+    receiver: &mut Receiver<u8>,
+) -> bool {
+    loop {
+        if let Some(message) = receiver.recv().await {
+            match message {
+                0 => return true,
+                1 | 2 => {
+                    toggle_bluetooth(&mut blue, &app_mutex, &sender).await;
+                    break
+                },
+                _ => {},
+            }
+        } else { 
+            return true 
+        };
+    };
+    while let Ok(message) = receiver.try_recv() {
+        match message {
+            0 => return true,
+            1 => toggle_bluetooth(&mut blue, &app_mutex, &sender).await,
+            _ => {},
+        };
+    };
+
+    false
+}
 async fn toggle_bluetooth(
     blue: &mut Blue,
     app_mutex: &Arc<Mutex<App>>,
