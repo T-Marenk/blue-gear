@@ -1,11 +1,12 @@
 use crate::{app::App, blue::Blue, keys::handle_key, ui::draw};
+use bluer::{AdapterEvent, Address};
 use crossterm::{
-    event::{self, Event},
-    event::{DisableMouseCapture, EnableMouseCapture},
+    event::Event,
+    event::{DisableMouseCapture, EnableMouseCapture, EventStream},
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
-use futures::pin_mut; // Will be used later
+use futures::{pin_mut, StreamExt}; // Will be used later
 use std::{error::Error, io, sync::Arc};
 use tokio::{
     runtime::Runtime,
@@ -19,8 +20,7 @@ use tui::{
     Terminal,
 };
 
-/// Start the application
-/// Creates the runtime, initializes App for usage and created alternate terminal for ui
+/// Start the application. Creates the runtime, initializes App for usage and created alternate terminal for ui.
 pub fn start() -> Result<(), Box<dyn Error>> {
     let rt: Runtime = match create_rt() {
         Ok(rt) => rt,
@@ -41,7 +41,7 @@ pub fn start() -> Result<(), Box<dyn Error>> {
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
 
-    let response = run(&mut terminal, app_mutex, blue, rt);
+    let response = run(&mut terminal, app_mutex.clone(), blue, &rt);
 
     disable_raw_mode()?;
     execute!(
@@ -58,8 +58,9 @@ pub fn start() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-/// Creates tokio runtime for application
-/// Uses single threaded runtime
+/// Creates tokio runtime for application. While the runtime is buld on multi thread runtime, it
+/// does only use a single thread. The multi thread runtime is used in order to spawn tasks to be
+/// run simultaneously.
 fn create_rt() -> Result<Runtime, Box<dyn Error>> {
     let rt = tokio::runtime::Builder::new_multi_thread()
         .worker_threads(1)
@@ -69,6 +70,7 @@ fn create_rt() -> Result<Runtime, Box<dyn Error>> {
     Ok(rt)
 }
 
+/// Used the create the channels through which the different tasks communicate with each other.
 fn create_channels() -> (Sender<u8>, Receiver<u8>) {
     let (sender, receiver): (Sender<u8>, Receiver<u8>) = channel(16);
     (sender, receiver)
@@ -81,19 +83,16 @@ fn run<B: Backend>(
     terminal: &mut Terminal<B>,
     app_mutex: Arc<Mutex<App>>,
     blue: Blue,
-    rt: Runtime,
+    rt: &Runtime,
 ) -> Result<(), Box<dyn Error>> {
     let (sender, receiver) = create_channels();
     rt.block_on(sender.send(1)).unwrap();
     let sender2 = sender.clone();
     let (b_sender, b_receiver) = create_channels();
 
-    let finder = rt.spawn(bluetooth_finder(
-        blue,
-        app_mutex.clone(),
-        sender,
-        b_receiver,
-    ));
+    let app_clone = app_mutex.clone();
+
+    let finder = rt.spawn(bluetooth_finder(blue, app_clone, sender, b_receiver));
     let reader = rt.spawn(event_reader(app_mutex.clone(), sender2, b_sender));
 
     rt.block_on(drawer(terminal, app_mutex, receiver));
@@ -123,27 +122,45 @@ async fn bluetooth_finder(
     }
 }
 
-/// Responsible for bluetooth when bluetooth is turned on
+/// Responsible for bluetooth when bluetooth is turned on. It runs a loop, detecting new changes in
+/// bluetooth, such as devices being removed or added and calls the appropriate functions to handle
+/// the events. On top of that it detects orders from other parts of the application.
 async fn bluetooth_on(
     blue: &mut Blue,
     app_mutex: &Arc<Mutex<App>>,
     sender: &Sender<u8>,
     receiver: &mut Receiver<u8>,
 ) -> bool {
+    let device_events = blue.start_search().await;
+    pin_mut!(device_events);
+
     loop {
-        if let Some(message) = receiver.recv().await {
-            match message {
-                0 => return true,
-                1 | 2 => {
-                    toggle_bluetooth(blue, app_mutex, sender).await;
-                    break;
+        tokio::select! {
+            Some(device_event) = device_events.next() => {
+                match device_event {
+                    AdapterEvent::DeviceAdded(addr) => {
+                        new_device(blue, app_mutex, sender, addr).await;
+                    }
+                    AdapterEvent::DeviceRemoved(addr) => {
+                        remove_device(blue, app_mutex, sender, addr).await;
+                    }
+                    _ => (),
                 }
-                _ => {}
             }
-        } else {
-            return true;
-        };
+            Some(message) = receiver.recv() => {
+                match message {
+                    0 => return true,
+                    1 | 2 => {
+                        toggle_bluetooth(blue, app_mutex, sender).await;
+                        break;
+                    }
+                    _ => {}
+                };
+            }
+            else => break
+        }
     }
+
     while let Ok(message) = receiver.try_recv() {
         match message {
             0 => break,
@@ -155,7 +172,41 @@ async fn bluetooth_on(
     false
 }
 
-/// Responsible for bluetooth management when bluetooth is turned off
+/// When a new device is detected and added, add it to the list of found devices as well as update
+/// the device informations. After that, call terminal to redraw the ui.
+async fn new_device(blue: &Blue, app_mutex: &Arc<Mutex<App>>, sender: &Sender<u8>, addr: Address) {
+    let device = blue.device(addr).await;
+    if device.is_some() {
+        let device = device.unwrap();
+        let mut app = app_mutex.lock().await;
+        app.devices.push(device);
+        app.device_information().await;
+    }
+    sender.send(1).await.unwrap();
+}
+
+/// When a *DeviceRemoved* event is detected, remove the corresponding device from list of found
+/// devices and call the terminal to draw the ui.
+async fn remove_device(blue: &Blue, app_mutex: &Arc<Mutex<App>>, sender: &Sender<u8>, addr: Address) {
+    let device = blue.device(addr).await;
+    if !device.is_some() {
+        return
+    }
+    let device = device.unwrap();
+    let mut app = app_mutex.lock().await;
+    let index = app.devices
+        .iter()
+        .position(|d| d.address() == device.address());
+    if !index.is_some() {
+        return
+    }
+    app.devices.remove(index.unwrap());
+    sender.send(1).await.unwrap();
+}
+
+/// Responsible for bluetooth management when bluetooth is turned off. This means that it only
+/// detects signals from other parts of the application, that give it orders to either toggle the
+/// bluetooth or to shut down operations.
 async fn bluetooth_off(
     blue: &mut Blue,
     app_mutex: &Arc<Mutex<App>>,
@@ -186,9 +237,11 @@ async fn bluetooth_off(
 
     false
 }
+
 async fn toggle_bluetooth(blue: &mut Blue, app_mutex: &Arc<Mutex<App>>, sender: &Sender<u8>) {
     blue.toggle().await.unwrap();
     let mut app = app_mutex.lock().await;
+    app.clear_devices();
     app.status = blue.status;
     drop(app);
     sender.send(1).await.unwrap();
@@ -197,15 +250,17 @@ async fn toggle_bluetooth(blue: &mut Blue, app_mutex: &Arc<Mutex<App>>, sender: 
 /// Responsible for checking system events and finding relevant keyevents. Once keyevents are
 /// found, key handeler is called
 async fn event_reader(app_mutex: Arc<Mutex<App>>, sender: Sender<u8>, b_sender: Sender<u8>) {
+    let mut reader = EventStream::new();
+
     loop {
-        let response: Option<u8> = match event::read().unwrap() {
-            Event::Key(key) => handle_key(&app_mutex, key, &b_sender).await,
-            _ => None,
-        };
-        match response {
-            None => {}
-            Some(r) => {
-                match r {
+        if let Some(device_event) = reader.next().await {
+            let response: Option<u8> = match device_event {
+                Ok(Event::Key(key)) => handle_key(&app_mutex, key, &b_sender).await,
+                _ => None,
+            };
+            match response {
+                None => {}
+                Some(r) => match r {
                     0 => {
                         b_sender.send(0).await.unwrap();
                         break;
@@ -215,12 +270,13 @@ async fn event_reader(app_mutex: Arc<Mutex<App>>, sender: Sender<u8>, b_sender: 
                     }
                     2 => {
                         sender.send(1).await.unwrap();
-                        // b_sender.send(1).unwrap();
                     }
                     _ => {}
-                }
+                },
             }
-        }
+        } else {
+            break;
+        };
     }
 }
 

@@ -1,4 +1,5 @@
-use bluer::Adapter;
+use bluer::{Adapter, AdapterEvent, Address, Device};
+use futures::Stream;
 
 /// Holds the data used to interact with bluetooth devices
 pub struct Blue {
@@ -23,5 +24,25 @@ impl Blue {
         self.adapter.set_powered(!self.status).await?;
         self.status = !self.status;
         Ok(())
+    }
+
+    /// Start searching for bluetooth devices
+    ///
+    /// # Panics
+    ///
+    /// Function panics if there is an error while starting search for devices
+    pub async fn start_search(&self) -> impl Stream<Item = AdapterEvent> {
+        match self.adapter.discover_devices().await {
+            Ok(device_events) => device_events,
+            Err(e) => panic!("There was an error while starting bluetooth serach {e}"),
+        }
+    }
+    
+    /// Get the corresponding device from a bluetooth address
+    pub async fn device(&self, addr: Address) -> Option<Device> {
+        match self.adapter.device(addr) {
+            Ok(device) => Some(device),
+            Err(_) => None,
+        }
     }
 }

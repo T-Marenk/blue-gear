@@ -5,7 +5,7 @@ use tui::{
     layout::{Constraint, Layout, Rect},
     style::{Color, Style},
     text::{Span, Spans},
-    widgets::{Block, Borders, Tabs},
+    widgets::{Block, Borders, Tabs, Row, Table},
     Frame,
 };
 
@@ -21,6 +21,16 @@ pub fn draw<B: Backend>(f: &mut Frame<B>, app: &mut App) {
     };
 
     draw_state_block(f, status, &parts);
+
+    let rows = app.informations
+        .iter()
+        .map(|d| {
+            Row::new(vec![d.to_owned()])
+        });
+    let table = Table::new(rows)
+        .block(Block::default().title("Devices").borders(Borders::ALL))
+        .widths(&[Constraint::Length(200)]);
+    f.render_widget(table, parts[1]);
 }
 
 fn draw_state_block<B: Backend>(f: &mut Frame<B>, status: &str, parts: &Rc<[Rect]>) {
