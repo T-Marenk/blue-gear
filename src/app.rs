@@ -1,4 +1,5 @@
 use bluer::Device;
+use tui::style::Color;
 
 /// Struct, which holds values used by the application
 pub struct App {
@@ -25,7 +26,7 @@ impl App {
 
         for i in 0..n {
             let name = self.devices[i].name().await;
-            if !name.is_ok() {
+            if name.is_err() {
                 continue;
             }
             let name = name.unwrap();
@@ -39,5 +40,20 @@ impl App {
 
     pub fn clear_devices(&mut self) {
         self.devices.clear();
+        self.informations.clear();
+    }
+
+    pub fn status_color(&self, status: &str) -> Color {
+        match status {
+            "On" => Color::Green,
+            _ => Color::Red,
+        }
+    }
+
+    pub fn toggle_selected(&self) -> Color {
+        match self.state {
+            0 => Color::Magenta,
+            _ => Color::White,
+        }
     }
 }

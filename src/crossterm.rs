@@ -189,7 +189,7 @@ async fn new_device(blue: &Blue, app_mutex: &Arc<Mutex<App>>, sender: &Sender<u8
 /// devices and call the terminal to draw the ui.
 async fn remove_device(blue: &Blue, app_mutex: &Arc<Mutex<App>>, sender: &Sender<u8>, addr: Address) {
     let device = blue.device(addr).await;
-    if !device.is_some() {
+    if device.is_none() {
         return
     }
     let device = device.unwrap();
@@ -197,7 +197,7 @@ async fn remove_device(blue: &Blue, app_mutex: &Arc<Mutex<App>>, sender: &Sender
     let index = app.devices
         .iter()
         .position(|d| d.address() == device.address());
-    if !index.is_some() {
+    if index.is_none() {
         return
     }
     app.devices.remove(index.unwrap());
@@ -252,31 +252,27 @@ async fn toggle_bluetooth(blue: &mut Blue, app_mutex: &Arc<Mutex<App>>, sender: 
 async fn event_reader(app_mutex: Arc<Mutex<App>>, sender: Sender<u8>, b_sender: Sender<u8>) {
     let mut reader = EventStream::new();
 
-    loop {
-        if let Some(device_event) = reader.next().await {
-            let response: Option<u8> = match device_event {
-                Ok(Event::Key(key)) => handle_key(&app_mutex, key, &b_sender).await,
-                _ => None,
-            };
-            match response {
-                None => {}
-                Some(r) => match r {
-                    0 => {
-                        b_sender.send(0).await.unwrap();
-                        break;
-                    }
-                    1 => {
-                        sender.send(1).await.unwrap();
-                    }
-                    2 => {
-                        sender.send(1).await.unwrap();
-                    }
-                    _ => {}
-                },
-            }
-        } else {
-            break;
+    while let Some(device_event) = reader.next().await {
+        let response: Option<u8> = match device_event {
+            Ok(Event::Key(key)) => handle_key(&app_mutex, key, &b_sender).await,
+            _ => None,
         };
+        match response {
+            None => {}
+            Some(r) => match r {
+                0 => {
+                    b_sender.send(0).await.unwrap();
+                    break;
+                }
+                1 => {
+                    sender.send(1).await.unwrap();
+                }
+                2 => {
+                    sender.send(1).await.unwrap();
+                }
+                _ => {}
+            },
+        }
     }
 }
 
