@@ -2,7 +2,7 @@ use crate::app::App;
 use crossterm::event::{KeyCode, KeyEvent};
 use std::sync::Arc;
 use tokio::{
-    sync::{mpsc::Sender, Mutex, MutexGuard},
+    sync::{mpsc::Sender, Mutex},
     time::{sleep, Duration},
 };
 
@@ -16,7 +16,19 @@ pub async fn handle_key(
         KeyEvent {
             code: KeyCode::Char('q'),
             ..
-        } => quit(app_mutex).await,
+        } => Some(0),
+        KeyEvent {
+            code: KeyCode::Down, ..
+        } => change_selection(app_mutex, "down").await,
+        KeyEvent {
+            code: KeyCode::Char('j'), ..
+        } => change_selection(app_mutex, "down").await,
+        KeyEvent {
+            code: KeyCode::Up, ..
+        } => change_selection(app_mutex, "up").await,
+        KeyEvent {
+            code: KeyCode::Char('k'), ..
+        } => change_selection(app_mutex, "up").await,
         KeyEvent {
             code: KeyCode::Tab, ..
         } => toggle(app_mutex, sender).await,
@@ -24,11 +36,10 @@ pub async fn handle_key(
     }
 }
 
-/// Tells the application it should quit, by turning its state to 1
-async fn quit(app_mutex: &Arc<Mutex<App>>) -> Option<u8> {
-    let mut app: MutexGuard<App> = app_mutex.lock().await;
-    app.state = 1;
-    Some(0)
+async fn change_selection(app_mutex: &Arc<Mutex<App>>, direction: &str) -> Option<u8> {
+    let mut app = app_mutex.lock().await;
+    app.change_selection(direction);
+    Some(1)
 }
 
 /// Call app functions to toggle bluetooth on and off

@@ -2,7 +2,7 @@ use crate::app::App;
 use tui::{
     backend::Backend,
     layout::{Constraint, Direction, Layout, Rect},
-    style::Style,
+    style::{Style, Modifier},
     text::Spans,
     widgets::{Block, Borders, Row, Table, Paragraph},
     Frame,
@@ -49,7 +49,7 @@ fn draw_state_block<B: Backend>(f: &mut Frame<B>, status: &str, part: Rect, app:
     f.render_widget(status_paragraph, chunks[1])
 }
 
-fn draw_device_block<B: Backend>(f: &mut Frame<B>, app: &App, part: Rect) {
+fn draw_device_block<B: Backend>(f: &mut Frame<B>, app: &mut App, part: Rect) {
     let rows = app.informations
         .iter()
         .map(|d| {
@@ -58,5 +58,7 @@ fn draw_device_block<B: Backend>(f: &mut Frame<B>, app: &App, part: Rect) {
 
     let table = Table::new(rows)
         .block(Block::default().title("Devices").borders(Borders::ALL))
+        .highlight_style(Style::default().add_modifier(Modifier::REVERSED))
+        .highlight_symbol(">> ")
         .widths(&[Constraint::Length(200)]);
-    f.render_widget(table, part);}
+    f.render_stateful_widget(table, part, &mut app.selected_device);}

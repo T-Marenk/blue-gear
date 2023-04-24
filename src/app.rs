@@ -1,11 +1,12 @@
 use bluer::Device;
-use tui::style::Color;
+use tui::{style::Color, widgets::TableState};
 
 /// Struct, which holds values used by the application
 pub struct App {
     pub devices: Vec<Device>,
     pub informations: Vec<String>,
     pub state: u8,
+    pub selected_device: TableState,
     pub status: bool,
 }
 
@@ -16,6 +17,7 @@ impl App {
             devices: Vec::new(),
             informations: Vec::new(),
             state: 0,
+            selected_device: TableState::default(),
             status: false,
         }
     }
@@ -54,6 +56,43 @@ impl App {
         match self.state {
             0 => Color::Magenta,
             _ => Color::White,
+        }
+    }
+
+    pub fn change_selection(&mut self, direction: &str) {
+        match direction {
+            "up" => self.selection_up(),
+            "down" => self.selection_down(),
+            _ => {},
+        }
+    }
+    
+    fn selection_up(&mut self) {
+        if self.state == 1 {
+            let i = match self.selected_device.selected() {
+                Some(i) => i,
+                None => 0,
+            };
+            if i == 0 {
+                self.state = 0;
+                self.selected_device.select(None);
+            } else {
+                self.selected_device.select(Some(i - 1));
+            }
+        }
+    }
+    fn selection_down(&mut self) {
+        if self.state == 0 {
+            self.state = 1;
+            self.selected_device.select(Some(0));
+        } else {
+            let i = match self.selected_device.selected() {
+                Some(i) => {
+                    (i + 1) % (self.informations.len())
+                }
+                None => 0,
+            };
+            self.selected_device.select(Some(i));
         }
     }
 }
